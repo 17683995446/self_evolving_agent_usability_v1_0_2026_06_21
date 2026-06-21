@@ -10,10 +10,15 @@ class Validator:
     @staticmethod
     def require_type(value: Any, expected_type: Type, name: str) -> None:
         if not isinstance(value, expected_type):
+            # 支持元组类型（如 (int, float)），生成可读类型名
+            if isinstance(expected_type, tuple):
+                type_name = " or ".join(t.__name__ for t in expected_type)
+            else:
+                type_name = expected_type.__name__
             raise ValidationError(
-                f"{name} must be {expected_type.__name__}",
+                f"{name} must be {type_name}",
                 field=name,
-                expected_range=expected_type.__name__,
+                expected_range=type_name,
                 actual_value=value
             )
 

@@ -34,6 +34,7 @@ class SafetyInvariant:
                     all_safe = False
                     self._record_violation(name, state)
             except Exception as e:
+                logger.warning(f"[SafetyInvariant.check] {name} raised: {e}", "verify")
                 results[name] = f"error: {e}"
                 all_safe = False
         result = {"safe": all_safe, "checks": results}
@@ -92,6 +93,7 @@ class LivenessProperty:
                 else:
                     results[name] = "pending"
             except Exception as e:
+                logger.warning(f"[LivenessProperty.check] {name} raised: {e}", "verify")
                 results[name] = f"error: {e}"
                 all_alive = False
         result = {"alive": all_alive, "checks": results}
@@ -260,3 +262,45 @@ class VerificationModule:
             "safety_violations": len(self.safety.get_violations()),
             "trace_count": len(self.tracer.traces),
         }
+
+    def get_state(self) -> Dict[str, Any]:
+        """获取模块状态（统一接口）。"""
+        return {
+            "safety_violations": len(self.safety.get_violations()),
+            "trace_count": len(self.tracer.traces),
+            "liveness_properties": len(self.liveness.properties),
+            "config": dict(self.config),
+        }
+
+    def reset(self) -> None:
+        """重置模块到初始状态（统一接口）。"""
+        logger.info("[VerificationModule.reset] resetting state", "verify")
+        self.safety = SafetyInvariant(self.config.get("safety", {}))
+        self.liveness = LivenessProperty(self.config.get("liveness", {}))
+        self.tracer = DecisionTracer(self.config.get("tracer", {}))
+        self.attributor = FeatureAttributor(self.config.get("attributor", {}))
+
+    def health_check(self) -> bool:
+        """健康检查（统一接口）。
+
+        Returns:
+            模块是否健康：子组件均存在且安全违规数未超阈值
+        """
+        try:
+            if self.safety is None:
+                logger.warning("health_check fail: safety is None", "verify")
+                return False
+            if self.liveness is None:
+                logger.warning("health_check fail: liveness is None", "verify")
+                return False
+            if self.tracer is None:
+                logger.warning("health_check fail: tracer is None", "verify")
+                return False
+            # 安全违规数超过 1000 视为异常
+            if len(self.safety.get_violations()) > 1000:
+                logger.warning("health_check fail: safety violations > 1000", "verify")
+                return False
+            return True
+        except Exception as exc:
+            logger.warning(f"health_check exception: {exc}", "verify")
+            return False
